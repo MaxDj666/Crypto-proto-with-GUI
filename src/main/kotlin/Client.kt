@@ -13,6 +13,12 @@ import java.math.BigInteger
 import java.security.SecureRandom
 
 class ClientApp : Application() {
+    private val logArea = TextArea().apply {
+        isEditable = false
+        prefHeight = 400.0
+        font = Font.font(14.0)
+    }
+    
     override fun start(primaryStage: Stage) {
         val messageInput = TextField().apply {
             promptText = "Введите сообщение"
@@ -23,17 +29,11 @@ class ClientApp : Application() {
             font = Font.font(14.0)
         }
 
-        val logArea = TextArea().apply {
-            isEditable = false
-            prefHeight = 400.0
-            font = Font.font(14.0)
-        }
-
         sendButton.setOnAction {
             val message = messageInput.text.trim()
             if (message.isNotBlank()) {
-                sendMsg(message, logArea)
-                logArea.appendText("Сообщение отправлено: $message\n\n")
+                sendMsg(message)
+                logArea.appendText("Сообщение для отправки: $message\n")
                 messageInput.clear()
             }
         }
@@ -46,83 +46,90 @@ class ClientApp : Application() {
         primaryStage.title = "Клиент"
         primaryStage.show()
     }
-}
 
-fun sendMsg(message: String, logArea: TextArea) {
-    val serverAddress = "localhost"
-    val port = 9999
+    private fun sendMsg(message: String) {
+        val serverAddress = "localhost"
+        val port = 9999
 
-    try {
-        val socket = Socket(serverAddress, port)
-        logArea.appendText("Подключено к серверу по адресу $serverAddress:$port\n")
+        try {
+            val socket = Socket(serverAddress, port)
+            appendLog("Подключено к серверу по адресу $serverAddress:$port")
 
-        val des = DES()
+            val des = DES()
 
-        val out = ObjectOutputStream(socket.getOutputStream())
-        val input = ObjectInputStream(socket.getInputStream())
+            val out = ObjectOutputStream(socket.getOutputStream())
+            val input = ObjectInputStream(socket.getInputStream())
 
-        // Приём публичного ключа от сервера
-        val publicE = input.readObject() as BigInteger
-        val publicN = input.readObject() as BigInteger
-        logArea.appendText("Получен публичный ключ от сервера.\n")
+            // Приём публичного ключа от сервера
+            val publicE = input.readObject() as BigInteger
+            val publicN = input.readObject() as BigInteger
+            appendLog("Получен публичный ключ от сервера.")
 
-        val rsaPublicKey = Pair(publicE, publicN)
-        logArea.appendText("Публичный ключ (e): $publicE\n")
-        logArea.appendText("Публичный ключ (n): $publicN\n")
+            val rsaPublicKey = Pair(publicE, publicN)
+            appendLog("Публичный ключ (e): $publicE")
+            appendLog("Публичный ключ (n): $publicN")
 
-        // Генерация случайного ключа DES (16 шестнадцатеричных символов = 64 бита)
-        val desKeyHex = generateRandomHexString(16)
-        logArea.appendText("Сгенерированный ключ DES (hex): $desKeyHex\n")
+            // Генерация случайного ключа DES (16 шестнадцатеричных символов = 64 бита)
+            val desKeyHex = generateRandomHexString()
+            appendLog("Сгенерированный ключ DES (hex): $desKeyHex")
 
-        val rsa = RSA()
+            val rsa = RSA()
 
-        // Шифрование ключа DES с помощью публичного ключа RSA сервера
-        val desKeyBigInt = BigInteger(desKeyHex, 16)
-        val encryptedDesKey = rsa.encrypt(desKeyBigInt, rsaPublicKey)
-        logArea.appendText("Зашифрованный ключ DES: $encryptedDesKey\n")
+            // Шифрование ключа DES с помощью публичного ключа RSA сервера
+            val desKeyBigInt = BigInteger(desKeyHex, 16)
+            val encryptedDesKey = rsa.encrypt(desKeyBigInt, rsaPublicKey)
+            appendLog("Зашифрованный ключ DES: $encryptedDesKey")
 
-        // Шифрование сообщения с помощью DES в режиме ECB
-        val encryptedMessageECB = des.ecbEncrypt(message, desKeyHex)
-        logArea.appendText("Зашифрованное сообщение (ECB): $encryptedMessageECB\n")
+            // Шифрование сообщения с помощью DES в режиме ECB
+            val encryptedMessageECB = des.ecbEncrypt(message, desKeyHex)
+            appendLog("Зашифрованное сообщение (ECB): $encryptedMessageECB")
 
-        val dsa = DSA()
+            val dsa = DSA()
 
-        // Генерация ключей DSA
-        dsa.generateKeys()
-        logArea.appendText("Сгенерирован публичный ключ DSA: (${dsa.getPublicKey()})\n")
+            // Генерация ключей DSA
+            dsa.generateKeys()
+            appendLog("Сгенерирован публичный ключ DSA: (${dsa.getPublicKey()})")
 
-        // Создаем цифровую подпись для сообщения
-        val signature = dsa.signMessage(message.toByteArray(Charsets.UTF_8))
-        logArea.appendText("Сообщение подписано: $signature\n")
+            // Создаем цифровую подпись для сообщения
+            val signature = dsa.signMessage(message.toByteArray(Charsets.UTF_8))
+            appendLog("Сообщение подписано: $signature")
 
-        // Отправка на сервер
-        out.writeObject(encryptedDesKey)
-        out.writeObject(encryptedMessageECB)
-        out.writeObject(signature)
-        out.writeObject(dsa.q)
-        out.writeObject(dsa.p)
-        out.writeObject(dsa.g)
-        out.writeObject(dsa.publicKey)
-        logArea.appendText("Отправлено зашифрованное сообщение на сервер.\n")
+            // Отправка на сервер
+            out.writeObject(encryptedDesKey)
+            out.writeObject(encryptedMessageECB)
+            out.writeObject(signature)
+            out.writeObject(dsa.q)
+            out.writeObject(dsa.p)
+            out.writeObject(dsa.g)
+            out.writeObject(dsa.publicKey)
+            appendLog("Отправлено зашифрованное сообщение на сервер.")
 
-        // Закрытие соединения
-        socket.close()
-        logArea.appendText("Соединение закрыто.\n")
+            // Закрытие соединения
+            socket.close()
+            appendLog("Соединение закрыто.\n")
 
-    } catch (e: Exception) {
-        e.printStackTrace()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
-}
 
-/**
- * Генерация случайной шестнадцатеричной строки заданной длины.
- */
-fun generateRandomHexString(length: Int): String {
-    val chars = "0123456789ABCDEF"
-    val rnd = SecureRandom()
-    return (1..length)
-        .map { chars[rnd.nextInt(chars.length)] }
-        .joinToString("")
+    /**
+     * Генерация случайной шестнадцатеричной строки заданной длины.
+     */
+    private fun generateRandomHexString(): String {
+        val chars = "0123456789ABCDEF"
+        val rnd = SecureRandom()
+        return (1..16)
+            .map { chars[rnd.nextInt(chars.length)] }
+            .joinToString("")
+    }
+
+    private fun appendLog(message: String) {
+        // Обновляем текстовую область из UI-потока
+        javafx.application.Platform.runLater {
+            logArea.appendText("$message\n")
+        }
+    }
 }
 
 fun main() {
