@@ -1,11 +1,15 @@
 import javafx.application.Application
+import javafx.application.Platform
 import javafx.geometry.Insets
 import javafx.scene.Scene
 import javafx.scene.control.Button
-import javafx.scene.control.TextArea
+import javafx.scene.control.ScrollPane
 import javafx.scene.control.TextField
 import javafx.scene.layout.VBox
+import javafx.scene.paint.Color
 import javafx.scene.text.Font
+import javafx.scene.text.Text
+import javafx.scene.text.TextFlow
 import javafx.stage.Stage
 import java.io.*
 import java.net.Socket
@@ -13,10 +17,15 @@ import java.math.BigInteger
 import java.security.SecureRandom
 
 class ClientApp : Application() {
-    private val logArea = TextArea().apply {
-        isEditable = false
-        prefHeight = 400.0
-        font = Font.font(14.0)
+    private val logArea = TextFlow().apply {
+        style = "-fx-background-color: #f4f4f4; -fx-padding: 10;" // Фон и отступы
+    }
+
+    private val scrollPane = ScrollPane(logArea).apply {
+        prefHeight = 300.0
+        isFitToWidth = true // Подгоняем ширину под размер окна
+        hbarPolicy = ScrollPane.ScrollBarPolicy.AS_NEEDED
+        vbarPolicy = ScrollPane.ScrollBarPolicy.AS_NEEDED
     }
     
     override fun start(primaryStage: Stage) {
@@ -33,16 +42,17 @@ class ClientApp : Application() {
             val message = messageInput.text.trim()
             if (message.isNotBlank()) {
                 sendMsg(message)
-                logArea.appendText("Сообщение для отправки: $message\n")
+                logArea.children.add(Text("Сообщение для отправки: $message\n").apply { 
+                    font =  Font.font(14.0)})
                 messageInput.clear()
             }
         }
 
-        val layout = VBox(20.0, messageInput, sendButton, logArea).apply {
-            padding = Insets(25.0)
+        val layout = VBox(15.0, messageInput, sendButton, scrollPane).apply {
+            padding = Insets(20.0)
         }
 
-        primaryStage.scene = Scene(layout, 800.0, 600.0)
+        primaryStage.scene = Scene(layout, 600.0, 400.0)
         primaryStage.title = "Клиент"
         primaryStage.show()
     }
@@ -53,7 +63,7 @@ class ClientApp : Application() {
 
         try {
             val socket = Socket(serverAddress, port)
-            appendLog("Подключено к серверу по адресу $serverAddress:$port")
+            appendLog("Подключено к серверу по адресу $serverAddress:$port\n")
 
             val des = DES()
 
@@ -63,36 +73,36 @@ class ClientApp : Application() {
             // Приём публичного ключа от сервера
             val publicE = input.readObject() as BigInteger
             val publicN = input.readObject() as BigInteger
-            appendLog("Получен публичный ключ от сервера.")
+            appendLog("Получен публичный ключ от сервера.\n")
 
             val rsaPublicKey = Pair(publicE, publicN)
-            appendLog("Публичный ключ (e): $publicE")
-            appendLog("Публичный ключ (n): $publicN")
+            appendLog("Публичный ключ (e): $publicE\n")
+            appendLog("Публичный ключ (n): $publicN\n")
 
             // Генерация случайного ключа DES (16 шестнадцатеричных символов = 64 бита)
             val desKeyHex = generateRandomHexString()
-            appendLog("Сгенерированный ключ DES (hex): $desKeyHex")
+            appendLog("Сгенерированный ключ DES (hex): $desKeyHex\n")
 
             val rsa = RSA()
 
             // Шифрование ключа DES с помощью публичного ключа RSA сервера
             val desKeyBigInt = BigInteger(desKeyHex, 16)
             val encryptedDesKey = rsa.encrypt(desKeyBigInt, rsaPublicKey)
-            appendLog("Зашифрованный ключ DES: $encryptedDesKey")
+            appendLog("Зашифрованный ключ DES: $encryptedDesKey\n")
 
             // Шифрование сообщения с помощью DES в режиме ECB
             val encryptedMessageECB = des.ecbEncrypt(message, desKeyHex)
-            appendLog("Зашифрованное сообщение (ECB): $encryptedMessageECB")
+            appendLog("Зашифрованное сообщение (ECB): $encryptedMessageECB\n")
 
             val dsa = DSA()
 
             // Генерация ключей DSA
             dsa.generateKeys()
-            appendLog("Сгенерирован публичный ключ DSA: (${dsa.getPublicKey()})")
+            appendLog("Сгенерирован публичный ключ DSA: (${dsa.getPublicKey()})\n")
 
             // Создаем цифровую подпись для сообщения
             val signature = dsa.signMessage(message.toByteArray(Charsets.UTF_8))
-            appendLog("Сообщение подписано: $signature")
+            appendLog("Сообщение подписано: $signature\n", Color.GREEN)
 
             // Отправка на сервер
             out.writeObject(encryptedDesKey)
@@ -102,11 +112,11 @@ class ClientApp : Application() {
             out.writeObject(dsa.p)
             out.writeObject(dsa.g)
             out.writeObject(dsa.publicKey)
-            appendLog("Отправлено зашифрованное сообщение на сервер.")
+            appendLog("Отправлено зашифрованное сообщение на сервер.\n", Color.GREEN)
 
             // Закрытие соединения
             socket.close()
-            appendLog("Соединение закрыто.\n")
+            appendLog("Соединение закрыто.\n\n")
 
         } catch (e: Exception) {
             e.printStackTrace()
@@ -124,10 +134,17 @@ class ClientApp : Application() {
             .joinToString("")
     }
 
-    private fun appendLog(message: String) {
-        // Обновляем текстовую область из UI-потока
-        javafx.application.Platform.runLater {
-            logArea.appendText("$message\n")
+    private fun appendLog(message: String, color: Color? = Color.BLACK) {
+        // Обновляем интерфейс через UI-поток
+        Platform.runLater {
+            val text = Text(message).apply {
+                fill = color // Устанавливаем цвет текста
+                font = Font.font(14.0) // Увеличиваем шрифт
+            }
+            logArea.children.add(text)
+
+            // Автоматическая прокрутка вниз
+            scrollPane.vvalue = 1.0
         }
     }
 }

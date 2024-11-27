@@ -21,10 +21,10 @@ class ServerApp : Application() {
     }
 
     private val scrollPane = ScrollPane(logArea).apply {
-        prefHeight = 400.0
+        prefHeight = 300.0
         isFitToWidth = true // Подгоняем ширину под размер окна
-        hbarPolicy = ScrollPane.ScrollBarPolicy.AS_NEEDED // Отключаем горизонтальную прокрутку
-        vbarPolicy = ScrollPane.ScrollBarPolicy.AS_NEEDED // Включаем вертикальную прокрутку
+        hbarPolicy = ScrollPane.ScrollBarPolicy.AS_NEEDED
+        vbarPolicy = ScrollPane.ScrollBarPolicy.AS_NEEDED
     }
 
     override fun start(primaryStage: Stage) {
@@ -37,11 +37,11 @@ class ServerApp : Application() {
             startServerButton.isDisable = true // Блокируем кнопку после запуска сервера
         }
 
-        val layout = VBox(20.0, startServerButton, scrollPane).apply {
-            padding = Insets(25.0)
+        val layout = VBox(15.0, startServerButton, scrollPane).apply {
+            padding = Insets(20.0)
         }
 
-        primaryStage.scene = Scene(layout, 800.0, 600.0)
+        primaryStage.scene = Scene(layout, 600.0, 400.0)
         primaryStage.title = "Сервер"
         primaryStage.show()
     }
